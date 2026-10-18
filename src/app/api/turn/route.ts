@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { demoHeard, demoTurn } from "@/lib/demo";
 import { transliterate } from "@/lib/kannada";
+import { checkScene, isCustomId } from "@/lib/custom";
 import { getScene, HOLD_ON_LINE, ONLY_KANNADA_LINE, REPEAT_LINE } from "@/lib/scenes";
 import { replyOk, sttGate, textGate, trimReply } from "@/lib/server/gates";
 import { systemPrompt, TURN_SCHEMA, userPrompt } from "@/lib/server/prompt";
 import { clientIp, rateLimit } from "@/lib/server/ratelimit";
 import { chatJson, chatStream, SarvamError, sarvamConfigured, speak, transcribe } from "@/lib/server/sarvam";
+import { verify } from "@/lib/server/plan";
 import { enumField, partialString, takeSentences, visibleJson } from "@/lib/server/stream";
 import type { HistoryItem, Scene, StreamEvent, TurnResult } from "@/lib/types";
 
@@ -282,7 +284,20 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ kind: "error", message: "Bad request.", scored: false } satisfies TurnResult, { status: 400 });
   }
-  const scene = getScene(String(form.get("sceneId") ?? ""));
+  const sceneId = String(form.get("sceneId") ?? "");
+  let scene = getScene(sceneId);
+  if (!scene && isCustomId(sceneId)) {
+    // The learner's own scene travels with the turn. Live turns only accept it
+    // unchanged from how the server wrote it; demo turns never reach the model.
+    const raw = String(form.get("scene") ?? "");
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {}
+    const checked = checkScene(parsed);
+    const demoTurnOnly = !sarvamConfigured() || form.get("demo") === "1";
+    if (checked && checked.id === sceneId && (demoTurnOnly || verify(raw, String(form.get("sceneSig") ?? "")))) scene = checked;
+  }
   if (!scene) return NextResponse.json({ kind: "error", message: "Unknown scene.", scored: false } satisfies TurnResult, { status: 404 });
 
   let history: HistoryItem[] = [];

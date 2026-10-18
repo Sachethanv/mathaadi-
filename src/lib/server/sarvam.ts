@@ -67,7 +67,7 @@ export async function transcribe(audio: Blob, filename: string, keyterms: string
   };
 }
 
-export async function chatJson(system: string, user: string, schema: object) {
+export async function chatJson(system: string, user: string, schema: object, maxTokens = 1500) {
   const res = await call(
     "/v1/chat/completions",
     {
@@ -80,12 +80,12 @@ export async function chatJson(system: string, user: string, schema: object) {
           { role: "user", content: user },
         ],
         temperature: 0.4,
-        max_tokens: 1500,
+        max_tokens: maxTokens,
         reasoning_effort: "low",
         response_format: { type: "json_schema", json_schema: { name: "turn", schema, strict: true } },
       }),
     },
-    25000,
+    maxTokens > 1500 ? 40000 : 25000,
   );
   const json = await res.json();
   const choice = json.choices?.[0];

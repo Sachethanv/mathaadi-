@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   const audio = form.get("audio");
   const target = String(form.get("target") ?? "");
   const durationMs = Number(form.get("durationMs") ?? 0);
-  if (!scene || !(audio instanceof Blob)) return NextResponse.json({ ok: false, message: "Bad request." }, { status: 400 });
+  if (!(audio instanceof Blob)) return NextResponse.json({ ok: false, message: "Bad request." }, { status: 400 });
 
   if (!sarvamConfigured() || form.get("demo") === "1") {
     return NextResponse.json({ ok: true, heard: target, demo: true });
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
   try {
     const ext = audio.type.includes("mp4") ? "m4a" : audio.type.includes("ogg") ? "ogg" : "webm";
-    const stt = await transcribe(audio, `drill.${ext}`, scene.keyterms);
+    const stt = await transcribe(audio, `drill.${ext}`, scene?.keyterms ?? []);
     const verdict = sttGate(stt, durationMs);
     if (!verdict.ok) return NextResponse.json({ ok: false, heard: stt.transcript || undefined, message: verdict.message });
     return NextResponse.json({ ok: true, heard: stt.transcript.trim() });

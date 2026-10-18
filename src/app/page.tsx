@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowIcon, CheckIcon, FlameIcon, GearIcon } from "@/components/icons";
 import { HearButtons, InAppBrowserBanner, LineText, SettingsSheet, useLive } from "@/components/ui";
 import { CATEGORIES, LEVELS, LIFESAVERS, phraseOfTheDay, SCENES, scenesIn } from "@/lib/scenes";
-import { last7, settingsStore, streak, useProgress, useSettings, type SceneRecord } from "@/lib/store";
+import { last7, settingsStore, streak, useMine, useProgress, useSettings, type SceneRecord } from "@/lib/store";
 import type { CategoryId, Scene } from "@/lib/types";
 
 function LevelDots({ level }: { level: Scene["level"] }) {
@@ -48,6 +48,7 @@ function SceneTile({ sc, rec }: { sc: Scene; rec?: SceneRecord }) {
 
 export default function Home() {
   const progress = useProgress();
+  const mine = useMine();
   const settings = useSettings();
   const { live, serverLive } = useLive();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -146,6 +147,16 @@ export default function Home() {
         <span className="mt-4 flex items-center justify-center gap-2 rounded-full bg-brand py-3 font-bold text-on-brand">
           Start · {pick.minutes} min <ArrowIcon size={18} />
         </span>
+      </Link>
+
+      {/* The learner's own situation */}
+      <Link href="/mine" className="mx-4 mt-3 block rounded-3xl border border-line bg-surface p-4 shadow-card transition active:scale-[0.99]">
+        <p className="font-bold">Something real coming up?</p>
+        <p className="mt-0.5 text-sm text-muted">Type what you need to do. Rehearse it here, then take a pocket card with you.</p>
+        <span className="mt-3 flex items-center justify-between rounded-full border border-line bg-bg px-4 py-2.5 text-sm text-muted">
+          e.g. Buy tomatoes for ₹20 a kg <ArrowIcon size={16} />
+        </span>
+        {mounted && mine.length > 0 && <p className="mt-2 text-xs font-semibold text-brand">{mine.length === 1 ? "1 scene of your own" : `${mine.length} scenes of your own`}</p>}
       </Link>
 
       <section className="mx-4 mt-3 rounded-3xl border border-line bg-surface p-4 shadow-card" aria-label="Your progress">

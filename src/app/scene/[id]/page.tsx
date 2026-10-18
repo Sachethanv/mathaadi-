@@ -14,6 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ScenePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!getScene(id)) notFound();
-  return <SceneFlow key={id} sceneId={id} />;
+  const scene = getScene(id);
+  if (!scene) notFound();
+  return <SceneFlow key={id} scene={scene} />;
 }

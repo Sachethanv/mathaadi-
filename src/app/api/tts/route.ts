@@ -1,4 +1,6 @@
 import { getScene, HOLD_ON_LINE, LIFESAVERS, ONLY_KANNADA_LINE, REPEAT_LINE, SCENES } from "@/lib/scenes";
+import { VOICES } from "@/lib/custom";
+import { lineKey, verify } from "@/lib/server/plan";
 import { clientIp, rateLimit } from "@/lib/server/ratelimit";
 import { sarvamConfigured, speak } from "@/lib/server/sarvam";
 
@@ -22,9 +24,12 @@ export async function GET(req: Request) {
   const scene = getScene(url.searchParams.get("scene") ?? "");
   const slow = url.searchParams.get("slow") === "1";
   if (!sarvamConfigured()) return new Response(null, { status: 204 });
-  if (!ALLOWED.has(text)) return new Response("Not a fixed line", { status: 400 });
+  // A line from a learner's own planned scene carries the server's signature.
+  const customVoice = url.searchParams.get("voice") ?? "";
+  const signed = VOICES.has(customVoice) && verify(lineKey(customVoice, text), url.searchParams.get("sig"));
+  if (!ALLOWED.has(text) && !signed) return new Response("Not a fixed line", { status: 400 });
 
-  const voice = scene?.character.voice ?? "ishita";
+  const voice = signed ? customVoice : (scene?.character.voice ?? "ishita");
   const key = `${voice}:${slow}:${text}`;
   let audio = memo.get(key);
   if (!audio) {

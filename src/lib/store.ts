@@ -1,6 +1,7 @@
 "use client";
 // Settings and progress live in localStorage: no login, nothing leaves the phone.
 import { useSyncExternalStore } from "react";
+import type { CustomPlan } from "./custom";
 
 export type Settings = {
   showKn: boolean;
@@ -60,6 +61,21 @@ function createStore<T>(key: string, fallback: T) {
 
 export const settingsStore = createStore<Settings>("maathaadi:settings", DEFAULT_SETTINGS);
 export const progressStore = createStore<Progress>("maathaadi:progress", DEFAULT_PROGRESS);
+
+// The learner's own planned scenes, newest first.
+export const mineStore = createStore<{ plans: CustomPlan[] }>("maathaadi:mine", { plans: [] });
+
+export function useMine() {
+  return useSyncExternalStore(mineStore.subscribe, mineStore.get, () => mineStore.fallback).plans;
+}
+
+export function saveMine(plan: CustomPlan) {
+  mineStore.set((m) => ({ plans: [plan, ...m.plans.filter((p) => p.scene.id !== plan.scene.id)].slice(0, 12) }));
+}
+
+export function removeMine(id: string) {
+  mineStore.set((m) => ({ plans: m.plans.filter((p) => p.scene.id !== id) }));
+}
 
 export function useSettings() {
   return useSyncExternalStore(settingsStore.subscribe, settingsStore.get, () => settingsStore.fallback);

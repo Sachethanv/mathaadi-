@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isFail, type useRecorder } from "@/hooks/useRecorder";
 import { band, scoreBest } from "@/lib/score";
+import { cardHref } from "@/lib/custom";
 import { nextScene as pickNext } from "@/lib/scenes";
 import { saveSceneResult, setSceneConfidence, useProgress } from "@/lib/store";
 import type { Scene } from "@/lib/types";
@@ -202,6 +203,10 @@ export function Report({ scene, msgs, goalComplete, recorder, live, onRestart }:
           Next time you {scene.mission}, say{" "}
           <span className="kn font-bold">{mission.kn}</span> <span className="text-muted">({mission.en})</span>.
         </p>
+        <Link href={cardHref(scene)} className="mt-3 flex items-center justify-center gap-2 rounded-full bg-surface py-3 font-semibold shadow-card">
+          🗒️ Open the pocket card
+        </Link>
+        <p className="mt-2 text-center text-xs text-muted">Your lines on one screen, with &ldquo;say it for me&rdquo; for when you freeze.</p>
       </section>
 
       <div className="grid grid-cols-2 gap-3 pt-1">

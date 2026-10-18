@@ -10,7 +10,8 @@ function line(l: { kn: string; en: string }, scripted: boolean) {
 
 /** The line the demo pretends the learner said when they use the mic. */
 export function demoHeard(scene: Scene, done: number[]) {
-  const next = scene.demo.find((_, i) => !done.includes(i)) ?? scene.demo[scene.demo.length - 1];
+  const next =
+    scene.demo.find((d, i) => d.required && !done.includes(i)) ?? scene.demo.find((_, i) => !done.includes(i)) ?? scene.demo[scene.demo.length - 1];
   return next.say;
 }
 

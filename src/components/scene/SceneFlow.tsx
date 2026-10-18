@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isFail, useRecorder } from "@/hooks/useRecorder";
 import { enqueueBase64, playBase64, playLine, queueFinished, stopAudio, unlockAudio } from "@/lib/audio";
 import { transliterate } from "@/lib/kannada";
-import { getScene, LIFESAVERS } from "@/lib/scenes";
+import type { CustomPlan } from "@/lib/custom";
+import { LIFESAVERS } from "@/lib/scenes";
 import { scoreBest } from "@/lib/score";
 import { clearConversation, loadConversation, markPracticed, saveConversation, settingsStore, useSettings } from "@/lib/store";
-import type { HistoryItem, StreamEvent, TurnResult } from "@/lib/types";
+import type { HistoryItem, Scene, StreamEvent, TurnResult } from "@/lib/types";
 import { BackIcon, BulbIcon, KeyboardIcon, MicIcon, RetryIcon, SendIcon, WaveIcon } from "../icons";
 import { MicButton } from "../MicButton";
 import { HearButtons, InAppBrowserBanner, LineText, Sheet, useLive, usePlaying } from "../ui";
@@ -21,10 +22,13 @@ type Pending = { heard?: string; typed?: boolean; demo?: boolean; reply?: string
 
 const fresh = (): Convo => ({ stage: "brief", msgs: [], doneSteps: [], stepsDone: 0, goalComplete: false });
 
-export function SceneFlow({ sceneId }: { sceneId: string }) {
-  const scene = getScene(sceneId)!;
+export function SceneFlow({ scene, plan }: { scene: Scene; plan?: CustomPlan }) {
+  const sceneId = scene.id;
   const settings = useSettings();
-  const { live, ready } = useLive();
+  const server = useLive();
+  const ready = server.ready;
+  // A plan written in demo mode has no signature, so it always plays scripted.
+  const live = server.live && !plan?.demo;
   const recorder = useRecorder();
   const playing = usePlaying();
 
@@ -167,6 +171,10 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
       .map((m) => (m.who === "character" ? { who: "character", kn: m.line.kn } : { who: "learner", kn: (m as Extract<Msg, { who: "learner" }>).heard }));
     const fd = new FormData();
     fd.append("sceneId", scene.id);
+    if (plan) {
+      fd.append("scene", JSON.stringify(plan.scene));
+      if (plan.sig) fd.append("sceneSig", plan.sig);
+    }
     fd.append("history", JSON.stringify(history));
     fd.append("done", JSON.stringify(c.doneSteps));
     if (!live) fd.append("demo", "1");

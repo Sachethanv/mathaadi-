@@ -15,6 +15,12 @@ function silentWav() {
   return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
 }
 
+// Voices and signatures for the learner's own planned scenes, by scene id.
+const customVoices = new Map<string, { voice: string; sigs: Record<string, string> }>();
+export function registerSceneVoice(sceneId: string, voice: string, sigs: Record<string, string> = {}) {
+  customVoices.set(sceneId, { voice, sigs });
+}
+
 let el: HTMLAudioElement | null = null;
 let unlocked = false;
 const listeners = new Set<(playing: boolean) => void>();
@@ -158,24 +164,39 @@ function speakBrowser(text: string, slow: boolean): Promise<boolean> {
  * server voice when live, and the browser's Kannada voice otherwise.
  * Resolves to false if nothing could be played.
  */
-export async function playLine(text: string, opts: { scene?: string; slow?: boolean; live: boolean }): Promise<boolean> {
-  if (opts.live) {
-    const key = `${opts.scene ?? ""}|${opts.slow ? 1 : 0}|${text}`;
-    let url = blobCache.get(key);
-    if (!url) {
-      try {
-        const q = new URLSearchParams({ text, scene: opts.scene ?? "", slow: opts.slow ? "1" : "0" });
-        const res = await fetch(`/api/tts?${q}`);
-        if (res.status === 200) {
-          url = URL.createObjectURL(await res.blob());
-          blobCache.set(key, url);
-        }
-      } catch {}
-    }
-    if (url) {
-      await playSrc(url);
-      return true;
-    }
+type LineOpts = { scene?: string; slow?: boolean; live: boolean };
+
+async function loadLine(text: string, opts: LineOpts): Promise<string | undefined> {
+  const key = `${opts.scene ?? ""}|${opts.slow ? 1 : 0}|${text}`;
+  let url = blobCache.get(key);
+  if (!url) {
+    try {
+      const q = new URLSearchParams({ text, scene: opts.scene ?? "", slow: opts.slow ? "1" : "0" });
+      const custom = opts.scene ? customVoices.get(opts.scene) : undefined;
+      if (custom?.sigs[text]) {
+        q.set("voice", custom.voice);
+        q.set("sig", custom.sigs[text]);
+      }
+      const res = await fetch(`/api/tts?${q}`);
+      if (res.status === 200) {
+        url = URL.createObjectURL(await res.blob());
+        blobCache.set(key, url);
+      }
+    } catch {}
+  }
+  return url;
+}
+
+/** Fetch a line's audio ahead of time (the service worker keeps it for offline use). */
+export function prefetchLine(text: string, opts: LineOpts) {
+  if (opts.live) void loadLine(text, opts);
+}
+
+export async function playLine(text: string, opts: LineOpts): Promise<boolean> {
+  const url = opts.live ? await loadLine(text, opts) : undefined;
+  if (url) {
+    await playSrc(url);
+    return true;
   }
   return speakBrowser(text, !!opts.slow);
 }

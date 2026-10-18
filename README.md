@@ -49,6 +49,14 @@ flowchart LR
 | 3 | LLM (`src/lib/server/prompt.ts`) | Schema-forced output; must only respond to the exact words heard, never guess |
 | 4 | Server (`src/app/api/turn/route.ts`) | Code overrides any "unclear" turn with the scripted repeat line; reply must be Kannada script and short; one retry, then a fallback line |
 
+### Your own situation, and the pocket card
+
+Learners can type a real situation coming up ("Buy tomatoes for ₹20 a kg at Jayanagar market"). `POST /api/plan` asks `sarvam-105b` (strict JSON schema) to write a scene for exactly that: the character, an opening line, 3 to 5 phrases with the learner's item, price and place in spoken Kannada, and a short sample script. Every Kannada line goes through the same script check as character replies; non-Kannada lines are dropped, and a plan with fewer than three good phrases is retried once. The model refuses harmful or deceptive requests. Plans are saved on the phone (`/mine`).
+
+The server signs each plan (HMAC over the scene JSON, key from `PLAN_SIGNING_SECRET` or derived from the Sarvam key). A live turn on a learner's scene is only accepted if the scene is unchanged, so nobody can edit the saved plan into a free general-purpose prompt. Each line also gets its own signature, so `/api/tts` speaks those lines and nothing else. In demo mode, the planner adapts the closest ready-made scene and adds the learner's price as a phrase.
+
+Every scene, built-in or the learner's own, has a **pocket card**: the lines in order with "Say it" (the phone speaks the line when you freeze), "Show" (big Kannada text to show the person), what you might hear back, and lifesaver phrases. Audio is fetched when the card opens, so it still plays offline at the stall, and the screen stays awake.
+
 ### Real-time turns
 
 Turns are streamed, so the conversation feels live instead of waiting for one big answer:
@@ -121,7 +129,10 @@ src/app/page.tsx                 Home: streak, phrase of the day, scenes, lifesa
 src/app/scene/[id]               Scene flow: brief → talk → report
 src/app/api/turn                 STT → gates → streamed LLM → gates → sentence TTS (or demo engine)
 src/lib/server/stream.ts         Reads the reply out of the model's JSON while it streams
-src/app/api/tts                  Cached audio for fixed lines
+src/app/api/tts                  Cached audio for fixed lines (and signed lines from learners' own scenes)
+src/app/api/plan                 Writes a scene for the learner's own situation
+src/app/mine                     Plan a real conversation; play and pocket card for own scenes
+src/app/scene/[id]/card          Pocket card for built-in scenes
 src/app/api/transcribe           "Say it again" drill on the report
 src/lib/scenes/                  Scene content by life area, phrases, demo scripts
 src/lib/kannada.ts               Script checks, transliteration, phoneme tokens
