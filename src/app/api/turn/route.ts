@@ -57,7 +57,9 @@ function errorResult(e: unknown): TurnResult {
           ? "The connection is slow. Check your data and try again."
           : "Something went wrong on our side. Try again.";
   console.error("[turn]", e);
-  return { kind: "error", message, scored: false };
+  // A short reason on screen (never the key), so a failure can be reported without the logs.
+  const reason = e instanceof Error ? e.message.replace(/\s+/g, " ").slice(0, 180) : String(e).slice(0, 180);
+  return { kind: "error", message: code === "upstream" ? `${message} (${reason})` : message, scored: false };
 }
 
 type Emit = (e: StreamEvent) => void;
