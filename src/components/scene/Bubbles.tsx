@@ -1,7 +1,7 @@
 "use client";
 import { band } from "@/lib/score";
 import type { Scene } from "@/lib/types";
-import { EarIcon } from "../icons";
+import { EarIcon, MicIcon, RetryIcon } from "../icons";
 import { HearButtons, LineText } from "../ui";
 import type { Msg, ScoredPhrase } from "./types";
 
@@ -32,12 +32,44 @@ function ScorePill({ m }: { m: ScoredPhrase }) {
   );
 }
 
-export function Bubble({ msg, scene, live, avatar, streaming = false }: { msg: Msg; scene: Scene; live: boolean; avatar: string; streaming?: boolean }) {
+function MicHelp() {
+  return (
+    <div className="rise mx-auto max-w-[90%] rounded-3xl border border-line bg-surface p-4 text-sm shadow-card" role="status">
+      <p className="font-semibold">Turn the microphone on</p>
+      {/* A tiny address bar, so people know which icon to look for. */}
+      <div className="mt-3 flex items-center gap-2 rounded-full bg-surface-2 px-3 py-2 text-xs text-muted" aria-hidden>
+        <span className="grid h-6 w-6 place-items-center rounded-full bg-brand text-on-brand">
+          <MicIcon size={14} />
+        </span>
+        <span className="truncate">{location.host}</span>
+      </div>
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-muted">
+        <li>Tap the icon at the left of the web address.</li>
+        <li>Set Microphone to Allow.</li>
+        <li>Reload this page.</li>
+      </ol>
+      <button type="button" onClick={() => location.reload()} className="mt-3 w-full rounded-full bg-brand py-2.5 font-semibold text-on-brand">
+        Reload
+      </button>
+      <p className="mt-2 text-center text-xs text-muted">Or keep going by typing below.</p>
+    </div>
+  );
+}
+
+export function Bubble({ msg, scene, live, avatar, streaming = false, onRetry }: { msg: Msg; scene: Scene; live: boolean; avatar: string; streaming?: boolean; onRetry?: () => void }) {
   if (msg.who === "notice") {
+    if (msg.help === "mic") return <MicHelp />;
     const cls = msg.tone === "good" ? "bg-good-soft text-good" : msg.tone === "warn" ? "bg-ok-soft text-ink" : "bg-surface-2 text-muted";
     return (
       <div className="rise flex justify-center" role="status">
-        <p className={`max-w-[90%] rounded-2xl px-4 py-2 text-center text-sm ${cls}`}>{msg.text}</p>
+        <div className={`max-w-[90%] rounded-2xl px-4 py-2 text-center text-sm ${cls}`}>
+          <p>{msg.text}</p>
+          {msg.help === "retry" && onRetry && (
+            <button type="button" onClick={onRetry} className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-surface px-4 py-1.5 text-sm font-semibold text-brand shadow-card">
+              <RetryIcon size={14} /> Try again
+            </button>
+          )}
+        </div>
       </div>
     );
   }

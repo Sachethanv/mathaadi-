@@ -61,7 +61,9 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
   }, [convo.msgs.length, thinking, pending?.heard, pending?.reply]);
 
   const push = (...msgs: Msg[]) => setConvo((c) => ({ ...c, msgs: [...c.msgs, ...msgs] }));
-  const notice = (t: string, tone: "info" | "warn" | "good" = "info") => push({ id: uid(), who: "notice", text: t, tone });
+  const notice = (t: string, tone: "info" | "warn" | "good" = "info", help?: "retry" | "mic") => push({ id: uid(), who: "notice", text: t, tone, help });
+  // The last turn sent, so a dropped connection can be retried in one tap.
+  const lastPayload = useRef<Parameters<typeof send>[0] | null>(null);
 
   const slow = settings.slowVoice;
 
@@ -74,7 +76,7 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
     setConvo({ ...fresh(), stage: "talk", msgs: [opening] });
     if (fail) {
       setTyping(true);
-      setTimeout(() => notice(fail.message, "warn"), 50);
+      setTimeout(() => notice(fail.message, "warn", fail.reason === "denied" ? "mic" : undefined), 50);
     }
     await playLine(scene.opening.kn, { scene: scene.id, slow, live });
     if (!fail) listenNext();
@@ -100,7 +102,7 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
   const handleResult = (r: TurnResult) => {
     const c = convoRef.current;
     if (r.kind === "no_speech" || (r.kind === "error" && !r.heard)) {
-      notice(r.message ?? "Try again.", r.kind === "error" ? "warn" : "info");
+      notice(r.message ?? "Try again.", r.kind === "error" ? "warn" : "info", r.kind === "error" ? "retry" : undefined);
       bumpStuck();
       if (r.reply) push({ id: uid(), who: "character", line: r.reply, scripted: true });
       return;
@@ -158,6 +160,7 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
     });
 
   const send = async (payload: { audio?: Blob; mime?: string; durationMs?: number; text?: string }) => {
+    lastPayload.current = payload;
     const c = convoRef.current;
     const history: HistoryItem[] = c.msgs
       .filter((m) => m.who !== "notice")
@@ -222,7 +225,7 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
         }
       }
     } catch {
-      if (!out.result) notice("The connection dropped. Check your data and try again.", "warn");
+      if (!out.result) notice("The connection dropped. Check your data and try again.", "warn", "retry");
     } finally {
       clearTimeout(t);
       setThinking(false);
@@ -256,13 +259,20 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
     setAutoRec(auto && !fail);
     startingRec.current = false;
     if (fail) {
-      notice(fail.message, "warn");
+      notice(fail.message, "warn", fail.reason === "denied" ? "mic" : undefined);
       if (fail.reason === "denied" || fail.reason === "unsupported") setTyping(true);
       return;
     }
     if (stopWanted.current) recorder.abort("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recorder]);
+
+  const retry = () => {
+    const p = lastPayload.current;
+    if (!p) return;
+    setConvo((c) => ({ ...c, msgs: c.msgs.slice(0, -1) })); // drop the error notice
+    send(p);
+  };
 
   const onMicStopRef = useRef<() => void>(() => {});
   const onMicStop = async () => {
@@ -360,7 +370,7 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
         <p className="mx-auto mb-4 max-w-[90%] rounded-2xl bg-surface-2 px-4 py-2 text-center text-sm text-muted">🎯 {scene.goal}</p>
         <div ref={listRef} className="space-y-4" aria-live="polite">
           {convo.msgs.map((m) => (
-            <Bubble key={m.id} msg={m} scene={scene} live={live} avatar={scene.icon} />
+            <Bubble key={m.id} msg={m} scene={scene} live={live} avatar={scene.icon} onRetry={m === convo.msgs.at(-1) && lastPayload.current && !thinking ? retry : undefined} />
           ))}
           {pending?.heard && (
             <Bubble msg={{ id: "pending-heard", who: "learner", heard: pending.heard, kind: "clear", typed: pending.typed, demo: pending.demo }} scene={scene} live={live} avatar={scene.icon} />

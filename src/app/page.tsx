@@ -117,6 +117,7 @@ export default function Home() {
           <p className="mt-2 leading-relaxed opacity-95">
             Rehearse {SCENES.length} real Bengaluru moments out loud, from autos to Ugadi lunch. Hold the mic, say it in Kannada, and see whether a local would understand you. Mistakes are welcome here.
           </p>
+          <p className="mt-2 text-sm opacity-85">Your voice goes to Sarvam AI to be understood and is never saved by Maathaadi. Your progress stays on this phone.</p>
           <button type="button" onClick={() => settingsStore.set({ onboarded: true })} className="mt-4 rounded-full bg-on-brand px-5 py-2.5 font-semibold text-brand">
             Got it
           </button>

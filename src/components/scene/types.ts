@@ -17,7 +17,7 @@ export type Msg =
       better?: Line | null;
       match?: ScoredPhrase | null;
     }
-  | { id: string; who: "notice"; text: string; tone: "info" | "warn" | "good" };
+  | { id: string; who: "notice"; text: string; tone: "info" | "warn" | "good"; help?: "retry" | "mic" };
 
 export type Convo = {
   stage: "brief" | "talk" | "report";
