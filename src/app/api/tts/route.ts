@@ -2,7 +2,7 @@ import { getScene, HOLD_ON_LINE, LIFESAVERS, ONLY_KANNADA_LINE, REPEAT_LINE, SCE
 import { VOICES } from "@/lib/custom";
 import { lineKey, verify } from "@/lib/server/plan";
 import { clientIp, rateLimit } from "@/lib/server/ratelimit";
-import { sarvamConfigured, speak } from "@/lib/server/sarvam";
+import { audioMime, sarvamConfigured, speak } from "@/lib/server/sarvam";
 
 export const runtime = "nodejs";
 
@@ -46,7 +46,7 @@ export async function GET(req: Request) {
   }
   return new Response(new Uint8Array(audio), {
     headers: {
-      "Content-Type": "audio/mpeg",
+      "Content-Type": audioMime(audio),
       "Cache-Control": "public, max-age=604800, s-maxage=31536000, immutable",
     },
   });

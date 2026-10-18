@@ -7,6 +7,9 @@ export const STT_MODEL = process.env.SARVAM_STT_MODEL || "saaras:v3";
 export const STT_MODE = process.env.SARVAM_STT_MODE || "verbatim";
 export const LLM_MODEL = process.env.SARVAM_LLM_MODEL || "sarvam-105b";
 export const TTS_MODEL = process.env.SARVAM_TTS_MODEL || "bulbul:v3";
+// Thinking tokens count toward max_tokens and slow every turn down, and the
+// character needs none, so thinking is off unless SARVAM_REASONING is set.
+const REASONING = ["low", "medium", "high"].includes(process.env.SARVAM_REASONING ?? "") ? process.env.SARVAM_REASONING : null;
 
 export function sarvamConfigured() {
   return KEY.length > 0 && process.env.DEMO_MODE !== "1";
@@ -67,7 +70,7 @@ export async function transcribe(audio: Blob, filename: string, keyterms: string
   };
 }
 
-export async function chatJson(system: string, user: string, schema: object, maxTokens = 1500) {
+export async function chatJson(system: string, user: string, schema: object, maxTokens = 2048) {
   const res = await call(
     "/v1/chat/completions",
     {
@@ -81,11 +84,11 @@ export async function chatJson(system: string, user: string, schema: object, max
         ],
         temperature: 0.4,
         max_tokens: maxTokens,
-        reasoning_effort: "low",
+        reasoning_effort: REASONING,
         response_format: { type: "json_schema", json_schema: { name: "turn", schema, strict: true } },
       }),
     },
-    maxTokens > 1500 ? 40000 : 25000,
+    maxTokens > 2048 ? 40000 : 25000,
   );
   const json = await res.json();
   const choice = json.choices?.[0];
@@ -105,11 +108,11 @@ export async function speak(text: string, speaker: string, pace = 1): Promise<Bu
     });
   let res: Response;
   try {
-    res = await call("/text-to-speech", { method: "POST", headers: { "Content-Type": "application/json" }, body: body("target_language_code") });
+    res = await call("/text-to-speech", { method: "POST", headers: { "Content-Type": "application/json" }, body: body("language_code") });
   } catch (e) {
-    // The docs name the field both ways; try the other spelling on a validation error.
+    // language_code is the documented field; older docs called it target_language_code.
     if (e instanceof SarvamError && (e.status === 400 || e.status === 422)) {
-      res = await call("/text-to-speech", { method: "POST", headers: { "Content-Type": "application/json" }, body: body("language_code") });
+      res = await call("/text-to-speech", { method: "POST", headers: { "Content-Type": "application/json" }, body: body("target_language_code") });
     } else throw e;
   }
   const json = await res.json();
@@ -152,8 +155,8 @@ export async function chatStream(
           { role: "user", content: user },
         ],
         temperature: 0.4,
-        max_tokens: 1500,
-        reasoning_effort: "low",
+        max_tokens: 2048,
+        reasoning_effort: REASONING,
         stream: true,
         response_format: { type: "json_schema", json_schema: { name: "turn", schema, strict: true } },
       }),
@@ -205,4 +208,9 @@ export async function chatStream(
     clearTimeout(firstByte);
     clearTimeout(overall);
   }
+}
+
+/** Sarvam's docs say audio comes back as WAV; we ask for MP3. Trust the bytes. */
+export function audioMime(audio: Buffer) {
+  return audio.subarray(0, 4).toString("latin1") === "RIFF" ? "audio/wav" : "audio/mpeg";
 }

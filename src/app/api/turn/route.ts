@@ -6,7 +6,7 @@ import { getScene, HOLD_ON_LINE, ONLY_KANNADA_LINE, REPEAT_LINE } from "@/lib/sc
 import { replyOk, sttGate, textGate, trimReply } from "@/lib/server/gates";
 import { systemPrompt, TURN_SCHEMA, userPrompt } from "@/lib/server/prompt";
 import { clientIp, rateLimit } from "@/lib/server/ratelimit";
-import { chatJson, chatStream, SarvamError, sarvamConfigured, speak, transcribe } from "@/lib/server/sarvam";
+import { audioMime, chatJson, chatStream, SarvamError, sarvamConfigured, speak, transcribe } from "@/lib/server/sarvam";
 import { verify } from "@/lib/server/plan";
 import { enumField, partialString, takeSentences, visibleJson } from "@/lib/server/stream";
 import type { HistoryItem, Scene, StreamEvent, TurnResult } from "@/lib/types";
@@ -93,7 +93,7 @@ function speechQueue(voice: string, pace: number, emit: Emit) {
       });
       chain = chain.then(async () => {
         const mp3 = await audio;
-        if (mp3) emit({ t: "audio", audio: mp3.toString("base64"), mime: "audio/mpeg" });
+        if (mp3) emit({ t: "audio", audio: mp3.toString("base64"), mime: audioMime(mp3) });
       });
     },
     drain: () => chain,
@@ -160,15 +160,18 @@ async function streamedLlm(scene: Scene, history: HistoryItem[], heard: string, 
     const base: LlmTurn = parsed ?? { comprehension: "partial", heard, meaning_en: null, step_done: false, goal_complete: false, reply_kn: shown, reply_en: "", tip: null, better_kn: null, better_en: null };
     return { turn: { ...base, comprehension: base.comprehension === "unclear" ? "partial" : base.comprehension, reply_kn: shown, reply_en: parsed?.reply_en ?? "" }, spoken: shown };
   }
-  return parsed && replyOk(parsed.reply_kn) ? { turn: parsed, spoken: null } : null;
+  if (parsed && replyOk(parsed.reply_kn)) return { turn: parsed, spoken: null };
+  console.error("[turn] streamed answer unusable:", badStart ? "first sentence not Kannada" : content.slice(0, 400));
+  return null;
 }
 
 async function plainLlm(scene: Scene, history: HistoryItem[], heard: string, typed: boolean, attempts: number): Promise<LlmTurn | null> {
   for (let attempt = 0; attempt < attempts; attempt++) {
     const { content, finish } = await chatJson(systemPrompt(scene), userPrompt(history, heard, typed), TURN_SCHEMA);
-    if (finish === "length") continue;
     const parsed = parseJsonSafe(content);
     if (parsed && replyOk(parsed.reply_kn)) return parsed;
+    // Shows up in the Vercel logs, to see why a turn fell back to "one moment".
+    console.error(`[turn] answer unusable (finish=${finish}):`, content.slice(0, 400));
   }
   return null;
 }
@@ -239,7 +242,7 @@ async function liveTurn(input: TurnInput, emit: Emit | null, speech: ReturnType<
       try {
         const mp3 = await speak(result.reply!.kn, scene.character.voice, pace);
         result.audio = mp3.toString("base64");
-        result.audioMime = "audio/mpeg";
+        result.audioMime = audioMime(mp3);
       } catch (e) {
         console.error("[turn] tts", e);
       }
