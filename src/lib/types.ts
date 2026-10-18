@@ -19,14 +19,23 @@ export type DemoStep = {
   required?: boolean;
 };
 
+export type CategoryId = "travel" | "food" | "home" | "errands" | "health" | "social";
+
+export type Category = { id: CategoryId; title: string; titleKn: string; icon: string; blurb: string };
+
 export type Scene = {
   id: string;
+  category: CategoryId;
+  /** 1 starter, 2 everyday, 3 confident */
+  level: 1 | 2 | 3;
   title: string;
   titleKn: string;
   icon: string;
-  tint: string; // css colour token name
+  tint: string; // css colour token name, from the category
   place: string;
   minutes: number;
+  /** A phone call rather than face to face. */
+  phone?: boolean;
   goal: string;
   goalSteps: string[];
   character: { name: string; role: string; voice: string; persona: string };
@@ -34,10 +43,16 @@ export type Scene = {
   phrases: Phrase[];
   keyterms: string[];
   regionalNote: string;
+  /** "Next time you ..." for the report's real-world mission. */
+  mission: string;
+  /** Extra rule for the character, e.g. never give medical advice. */
+  guardrail?: string;
   maxTurns: number;
   inferred?: boolean;
   demo: DemoStep[];
 };
+
+export type SceneDef = Omit<Scene, "tint" | "minutes" | "maxTurns"> & Partial<Pick<Scene, "minutes" | "maxTurns">>;
 
 export type Line = { kn: string; en: string; translit: string };
 

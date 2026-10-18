@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isFail, type useRecorder } from "@/hooks/useRecorder";
 import { band, scoreBest } from "@/lib/score";
-import { SCENES } from "@/lib/scenes";
+import { nextScene as pickNext } from "@/lib/scenes";
 import { saveSceneResult, setSceneConfidence, useProgress } from "@/lib/store";
 import type { Scene } from "@/lib/types";
 import { CheckIcon, RetryIcon } from "../icons";
@@ -83,7 +83,7 @@ export function Report({ scene, msgs, goalComplete, recorder, live, onRestart }:
   const typedTurns = msgs.filter((m) => m.who === "learner" && m.typed).length;
   const overall = items.length ? Math.round(items.reduce((a, b) => a + b.score, 0) / items.length) : 0;
   const weakest = [...items].sort((a, b) => a.score - b.score)[0];
-  const nextScene = SCENES[(SCENES.findIndex((s) => s.id === scene.id) + 1) % SCENES.length];
+  const nextScene = pickNext(scene, (id) => !!progress.scenes[id]?.goalMet);
   const mission = weakest ?? { kn: scene.phrases[0].kn, en: scene.phrases[0].en };
 
   useEffect(() => {
@@ -199,7 +199,7 @@ export function Report({ scene, msgs, goalComplete, recorder, live, onRestart }:
       <section className="rounded-3xl bg-accent-soft p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted">Real-world mission</p>
         <p className="mt-1">
-          Next time you&apos;re {scene.id === "auto" ? "taking an auto" : scene.id === "market" ? "buying vegetables" : scene.id === "bus" ? "on a bus" : "at a clinic"}, say{" "}
+          Next time you {scene.mission}, say{" "}
           <span className="kn font-bold">{mission.kn}</span> <span className="text-muted">({mission.en})</span>.
         </p>
       </section>

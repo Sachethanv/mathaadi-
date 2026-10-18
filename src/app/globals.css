@@ -20,10 +20,12 @@
   --ok-soft: #fdecd3;
   --work: #c2410c;
   --work-soft: #fde3d6;
-  --tint-auto: #fdefc8;
-  --tint-market: #fbe0d8;
-  --tint-bus: #dcebf9;
-  --tint-clinic: #e2f2ea;
+  --tint-travel: #fdefc8;
+  --tint-food: #fbe0d8;
+  --tint-home: #ebe3f7;
+  --tint-errands: #dcebf9;
+  --tint-health: #e2f2ea;
+  --tint-social: #fce3ec;
   --shadow: 0 1px 2px rgb(31 27 22 / 0.04), 0 6px 20px rgb(31 27 22 / 0.06);
   color-scheme: light;
 }
@@ -48,10 +50,12 @@
     --ok-soft: #3a2a10;
     --work: #fb923c;
     --work-soft: #3b1f12;
-    --tint-auto: #3a3015;
-    --tint-market: #3b2420;
-    --tint-bus: #1a2a3a;
-    --tint-clinic: #18302a;
+    --tint-travel: #3a3015;
+    --tint-food: #3b2420;
+    --tint-home: #2c2440;
+    --tint-errands: #1a2a3a;
+    --tint-health: #18302a;
+    --tint-social: #3a1e2a;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25);
     color-scheme: dark;
   }
@@ -139,6 +143,9 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .rise, .pulse-ring, .dot, .sheet { animation: none !important; }
 }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 12px); }
 .safe-top { padding-top: max(env(safe-area-inset-top), 0px); }

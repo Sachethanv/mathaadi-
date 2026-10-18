@@ -1,6 +1,6 @@
 # Maathaadi (ಮಾತಾಡಿ): speak Kannada for real Bengaluru moments
 
-Maathaadi is a mobile-first web app (PWA) where newcomers to Bengaluru rehearse real conversations out loud in spoken Kannada: an auto ride, a vegetable stall, a BMTC bus and a clinic. An AI character talks back in Kannada. After each line, the app shows **exactly what it heard** and an honest **"would a local understand you?"** intelligibility score, with the specific sounds to fix (ಳ vs ಲ, long vs short vowels, double consonants).
+Maathaadi is a mobile-first web app (PWA) where newcomers to Bengaluru rehearse real conversations out loud in spoken Kannada. It has 21 everyday scenes in six life areas, from an auto ride and a darshini breakfast to house hunting, a call to the plumber and Ugadi lunch. An AI character talks back in Kannada. After each line, the app shows **exactly what it heard** and an honest **"would a local understand you?"** intelligibility score, with the specific sounds to fix (ಳ vs ಲ, long vs short vowels, double consonants).
 
 Built for the Kannada Digital Innovation Hackathon 2026.
 
@@ -12,6 +12,19 @@ Built for the Kannada Digital Innovation Hackathon 2026.
 - **The AI never guesses.** Unclear or inaudible speech is caught in code before the AI sees it, and is never scored (see below).
 - **Intelligibility, not accent.** Kanglish and regional Kannada count as correct.
 - **No login, no install.** Open the link, tap "Add to home screen". Progress and the daily streak stay on the phone.
+
+## Scenes
+
+| Area | Scenes |
+|---|---|
+| Getting around | Auto ride, BMTC bus, Namma Metro, Asking the way |
+| Food & shopping | Vegetable stall, Darshini breakfast, Grocery shop |
+| Home | House hunting, Hiring house help, Calling a plumber (phone), Delivery at the gate (phone) |
+| Errands | Phone recharge, At the tailor, At the bank |
+| Health & help | Clinic visit, Pharmacy, Lost wallet at the police station |
+| People & festivals | Tea stall chat, Meeting a neighbour, Office lunch chat, Ugadi lunch |
+
+Each scene has a level (Starter, Everyday, Confident), a goal with three steps, 4 to 5 pre-taught phrases, a character persona and a scripted demo. Scenes live in `src/lib/scenes/<area>.ts`; adding one is a single object. Health, bank and police characters carry extra guardrails (no medical or legal advice, never ask for PINs or OTPs).
 
 ## How a turn works
 
@@ -51,7 +64,7 @@ After two unclear tries in a row, the app stops asking for repeats and opens hin
 | Character | Sarvam `sarvam-105b`, `json_schema` structured output |
 | Voice | Sarvam `bulbul:v3`, one voice per character, slow replay |
 | Backend | Next.js API routes on Vercel (keys stay server-side) |
-| Data | Scenes in `src/lib/scenes.ts`; progress in `localStorage` |
+| Data | Scenes in `src/lib/scenes/`; progress in `localStorage` |
 
 ## Run it locally
 
@@ -84,7 +97,7 @@ Audio is sent to Sarvam AI for transcription and is not stored by Maathaadi. Pro
 
 ## Before the demo
 
-- Have a native speaker review the lines in `src/lib/scenes.ts`; the character copies their register.
+- Have a native speaker review the lines in `src/lib/scenes/`; the character copies their register.
 - Record 10 test sentences (a few deliberately broken) and tune the Gate 2 thresholds.
 - Sarvam's docs say `mode=verbatim` applies to `saaras:v3`; `saaras:v4` adds `keyterms` for place names. Set `SARVAM_STT_MODEL=saaras:v4` to compare.
 
@@ -96,7 +109,7 @@ src/app/scene/[id]               Scene flow: brief → talk → report
 src/app/api/turn                 STT → gates → LLM → gates → TTS (or demo engine)
 src/app/api/tts                  Cached audio for fixed lines
 src/app/api/transcribe           "Say it again" drill on the report
-src/lib/scenes.ts                Scene content, phrases, demo scripts
+src/lib/scenes/                  Scene content by life area, phrases, demo scripts
 src/lib/kannada.ts               Script checks, transliteration, phoneme tokens
 src/lib/score.ts                 Intelligibility scorer
 src/hooks/useRecorder.ts         Push-to-talk recorder with Gate 1

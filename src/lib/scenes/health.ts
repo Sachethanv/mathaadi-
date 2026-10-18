@@ -1,0 +1,160 @@
+import type { SceneDef } from "../types";
+
+const NO_MEDICAL_ADVICE = "Never diagnose, never suggest or name medicines or doses beyond what the prescription says. For anything medical, say the doctor will advise.";
+
+export const HEALTH: SceneDef[] = [
+  {
+    id: "clinic",
+    category: "health",
+    level: 2,
+    title: "Clinic visit",
+    titleKn: "ಕ್ಲಿನಿಕ್",
+    icon: "🩺",
+    place: "Front desk of a neighbourhood clinic",
+    goal: "Book a doctor's slot for this evening",
+    goalSteps: ["Say you need the doctor", "Describe your problem", "Agree on a time"],
+    inferred: true,
+    character: {
+      name: "Shwetha",
+      role: "clinic receptionist",
+      voice: "ishita",
+      persona:
+        "Shwetha, a calm, polite clinic receptionist in her 20s. Uses respectful Kannada (ನೀವು). Only handles booking, timings and simple symptom words. She never diagnoses or suggests medicine; if asked, she says the doctor will tell them.",
+    },
+    opening: { kn: "ನಮಸ್ಕಾರ, ಏನ್ ಸಹಾಯ ಬೇಕು?", en: "Hello, how can I help you?" },
+    phrases: [
+      { id: "clinic-1", kn: "ಡಾಕ್ಟರ್‌ನ ನೋಡ್ಬೇಕು", en: "I need to see the doctor", variants: ["ಡಾಕ್ಟರ್ನ ನೋಡ್ಬೇಕು", "ಡಾಕ್ಟರನ್ನ ನೋಡಬೇಕು"] },
+      { id: "clinic-2", kn: "ನನಗೆ ಜ್ವರ ಇದೆ", en: "I have a fever", variants: ["ನಂಗೆ ಜ್ವರ ಇದೆ"] },
+      { id: "clinic-3", kn: "ಇವತ್ತು ಸಂಜೆ ಸಿಗ್ತಾರಾ?", en: "Is the doctor available this evening?" },
+      { id: "clinic-4", kn: "ಎಷ್ಟು ಹೊತ್ತಿಗೆ ಬರ್ಲಿ?", en: "What time should I come?" },
+    ],
+    keyterms: ["doctor", "ಡಾಕ್ಟರ್", "appointment", "ಜ್ವರ", "ಕೆಮ್ಮು", "ಸಂಜೆ"],
+    regionalNote: "ನಂಗೆ for ನನಗೆ is everyday speech and perfectly understood.",
+    mission: "visit a clinic",
+    guardrail: NO_MEDICAL_ADVICE,
+    demo: [
+      {
+        match: ["ಡಾಕ್ಟರ್", "doctor", "ನೋಡ್ಬೇಕು", "nodbeku"],
+        say: "ಡಾಕ್ಟರ್‌ನ ನೋಡ್ಬೇಕು",
+        reply: { kn: "ಸರಿ. ಏನ್ ತೊಂದರೆ ಆಗ್ತಿದೆ?", en: "Okay. What's troubling you?" },
+        required: true,
+      },
+      {
+        match: ["ಜ್ವರ", "jwara", "ಕೆಮ್ಮು", "kemmu", "ನೋವು"],
+        say: "ನನಗೆ ಜ್ವರ ಇದೆ",
+        reply: { kn: "ಅಯ್ಯೋ. ಇವತ್ತು ಸಂಜೆ ಆರು ಗಂಟೆಗೆ ಸ್ಲಾಟ್ ಇದೆ, ಆಗುತ್ತಾ?", en: "Oh no. There's a slot at six this evening, does that work?" },
+        required: true,
+      },
+      {
+        match: ["ಸಂಜೆ", "ಸರಿ", "ಹೊತ್ತಿಗೆ", "sanje", "sari", "ಆಗುತ್ತೆ"],
+        say: "ಸರಿ, ಸಂಜೆ ಬರ್ತೀನಿ",
+        reply: { kn: "ಸರಿ, ಸಂಜೆ ಆರು ಗಂಟೆಗೆ ಬುಕ್ ಮಾಡಿದೀನಿ. ಹತ್ತು ನಿಮಿಷ ಮುಂಚೆ ಬನ್ನಿ.", en: "Done, booked for six this evening. Come ten minutes early." },
+        required: true,
+      },
+    ],
+  },
+  {
+    id: "pharmacy",
+    category: "health",
+    level: 2,
+    title: "Pharmacy",
+    titleKn: "ಮೆಡಿಕಲ್ ಶಾಪ್",
+    icon: "💊",
+    place: "The counter of a 24-hour medical shop",
+    goal: "Buy your prescribed tablets and check how to take them",
+    goalSteps: ["Ask for the tablets", "Ask how often", "Ask before or after food"],
+    character: {
+      name: "Deepa",
+      role: "pharmacist",
+      voice: "priya",
+      persona:
+        "Deepa, a careful pharmacist in her 30s. Reads only from the doctor's prescription the customer shows: five days, twice a day, after food. Writes the timing on the strip. Never recommends medicines of her own.",
+    },
+    opening: { kn: "ಹೇಳಿ, ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್ ಇದೆಯಾ?", en: "Tell me, do you have a prescription?" },
+    phrases: [
+      { id: "ph-1", kn: "ಹೂಂ, ಈ ಮಾತ್ರೆ ಬೇಕು", en: "Yes, I need these tablets" },
+      { id: "ph-2", kn: "ದಿನಕ್ಕೆ ಎಷ್ಟು ಸಲ ತಗೋಬೇಕು?", en: "How many times a day should I take it?" },
+      { id: "ph-3", kn: "ಊಟದ ಮುಂಚೆನಾ, ಆಮೇಲಾ?", en: "Before food or after?" },
+      { id: "ph-4", kn: "ಬಿಲ್ ಕೊಡಿ", en: "Please give me the bill" },
+    ],
+    keyterms: ["prescription", "ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್", "ಮಾತ್ರೆ", "tablet", "ಊಟ", "bill"],
+    regionalNote: "ಮಾತ್ರೆ (tablet) has a long ಆ; ಮತ್ರೆ with a short vowel can trip a listener.",
+    mission: "pick up medicine",
+    guardrail: NO_MEDICAL_ADVICE,
+    demo: [
+      {
+        match: ["ಮಾತ್ರೆ", "ಮತ್ರೆ", "maatre", "ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್", "ಹೂಂ"],
+        say: "ಹೂಂ, ಈ ಮತ್ರೆ ಬೇಕು",
+        reply: { kn: "ಸರಿ, ಐದು ದಿನದ್ದು ಕೊಡ್ತೀನಿ.", en: "Okay, I'll give you five days' worth." },
+        required: true,
+      },
+      {
+        match: ["ಸಲ", "ದಿನಕ್ಕೆ", "sala", "ಎಷ್ಟು"],
+        say: "ದಿನಕ್ಕೆ ಎಷ್ಟು ಸಲ ತಗೋಬೇಕು?",
+        reply: { kn: "ಡಾಕ್ಟರ್ ಬರೆದ ಹಾಗೆ, ದಿನಕ್ಕೆ ಎರಡು ಸಲ.", en: "As the doctor wrote: twice a day." },
+        required: true,
+      },
+      {
+        match: ["ಊಟ", "ಮುಂಚೆ", "ಆಮೇಲೆ", "ಆಮೇಲಾ", "oota"],
+        say: "ಊಟದ ಮುಂಚೆನಾ, ಆಮೇಲಾ?",
+        reply: { kn: "ಊಟ ಆದ್ಮೇಲೆ. ಸ್ಟ್ರಿಪ್ ಮೇಲೆ ಬರೆದಿದೀನಿ.", en: "After food. I've written it on the strip." },
+        required: true,
+      },
+      {
+        match: ["ಬಿಲ್", "bill"],
+        say: "ಬಿಲ್ ಕೊಡಿ",
+        reply: { kn: "ಇನ್ನೂರ ಹತ್ತು ರೂಪಾಯಿ ಆಯ್ತು.", en: "That's two hundred and ten rupees." },
+      },
+    ],
+  },
+  {
+    id: "police",
+    category: "health",
+    level: 3,
+    title: "Lost wallet",
+    titleKn: "ಪೊಲೀಸ್ ಸ್ಟೇಷನ್",
+    icon: "👮",
+    place: "The front desk of the local police station",
+    goal: "Report a lost wallet and leave your number",
+    goalSteps: ["Say what you lost", "Say where", "Leave your phone number"],
+    inferred: true,
+    character: {
+      name: "Gowda",
+      role: "head constable",
+      voice: "kabir",
+      persona:
+        "Head constable Gowda, in his 50s, at the station's front desk. Gruff at first, kind underneath, procedural. Takes a written complaint with a phone number and promises to call if it's found.",
+    },
+    opening: { kn: "ಹೇಳಿ, ಏನಾಯ್ತು?", en: "Tell me, what happened?" },
+    phrases: [
+      { id: "pol-1", kn: "ನನ್ನ ಪರ್ಸ್ ಕಳೆದು ಹೋಯ್ತು", en: "I lost my wallet" },
+      { id: "pol-2", kn: "ಬಸ್‌ನಲ್ಲಿ ಕಳೆದು ಹೋಯ್ತು", en: "I lost it on the bus", variants: ["ಬಸ್ನಲ್ಲಿ ಕಳೆದು ಹೋಯ್ತು"] },
+      { id: "pol-3", kn: "ಕಂಪ್ಲೇಂಟ್ ಕೊಡ್ಬೇಕು", en: "I want to file a complaint" },
+      { id: "pol-4", kn: "ನನ್ನ ಫೋನ್ ನಂಬರ್ ಬರ್ಕೊಳ್ಳಿ", en: "Please note down my phone number" },
+    ],
+    keyterms: ["purse", "ಪರ್ಸ್", "wallet", "complaint", "ಕಂಪ್ಲೇಂಟ್", "bus", "phone number"],
+    regionalNote: "ಕಳೆದು ಹೋಯ್ತು (got lost) has ಳ: curl the tongue back. ಕಲೆದು with ಲ sounds like 'stained'.",
+    mission: "need help from the police",
+    guardrail: "Stay procedural. Give no legal advice beyond taking the complaint and saying they'll call if it's found. Emergency number in India is 112.",
+    demo: [
+      {
+        match: ["ಪರ್ಸ್", "purse", "ಕಳೆದು", "ಕಲೆದು", "wallet"],
+        say: "ನನ್ನ ಪರ್ಸ್ ಕಲೆದು ಹೋಯ್ತು",
+        reply: { kn: "ಅಯ್ಯೋ. ಎಲ್ಲಿ ಕಳೆದು ಹೋಯ್ತು?", en: "Oh no. Where did you lose it?" },
+        required: true,
+      },
+      {
+        match: ["ಬಸ್", "bus", "ಮೆಟ್ರೋ", "ಆಟೋ", "ರೋಡ್"],
+        say: "ಬಸ್‌ನಲ್ಲಿ ಕಳೆದು ಹೋಯ್ತು",
+        reply: { kn: "ಸರಿ, ಒಂದು ಕಂಪ್ಲೇಂಟ್ ಬರ್ಕೊಡಿ. ಫೋನ್ ನಂಬರ್ ಹಾಕಿ.", en: "Okay, write a complaint. Put your phone number on it." },
+        required: true,
+      },
+      {
+        match: ["ನಂಬರ್", "number", "ಫೋನ್", "ಕಂಪ್ಲೇಂಟ್"],
+        say: "ನನ್ನ ಫೋನ್ ನಂಬರ್ ಬರ್ಕೊಳ್ಳಿ",
+        reply: { kn: "ಸರಿ, ಸಿಕ್ಕರೆ ಫೋನ್ ಮಾಡ್ತೀವಿ. ಚಿಂತೆ ಮಾಡ್ಬೇಡಿ.", en: "Okay, we'll call if it turns up. Don't worry." },
+        required: true,
+      },
+    ],
+  },
+];

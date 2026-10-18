@@ -13,7 +13,7 @@ export function Brief({ scene, live, onStart, starting }: { scene: Scene; live: 
           <div>
             <p className="text-sm text-muted">{scene.place}</p>
             <p className="mt-1 font-semibold">
-              You&apos;ll talk to {scene.character.name}, {scene.character.role === "auto driver" ? "an" : "a"} {scene.character.role}.
+              {scene.phone ? "📞 Phone call with" : "You'll talk to"} {scene.character.name}, the {scene.character.role}.
             </p>
           </div>
         </div>
