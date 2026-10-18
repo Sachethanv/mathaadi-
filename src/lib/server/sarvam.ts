@@ -53,7 +53,9 @@ export type SttResult = { transcript: string; language_code: string | null; lang
 
 export async function transcribe(audio: Blob, filename: string, keyterms: string[]): Promise<SttResult> {
   const form = new FormData();
-  form.append("file", audio, filename);
+  // Sarvam checks the part's MIME type and rejects parameters like ";codecs=opus".
+  const type = filename.endsWith(".wav") ? "audio/wav" : audio.type.split(";")[0] || "application/octet-stream";
+  form.append("file", new Blob([await audio.arrayBuffer()], { type }), filename);
   form.append("model", STT_MODEL);
   form.append("mode", STT_MODE);
   // "unknown" makes Sarvam report the language it heard and how sure it is.

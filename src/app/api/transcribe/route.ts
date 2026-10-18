@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   if (audio.size < 1000) return NextResponse.json({ ok: false, message: "Hold the button while you speak." });
 
   try {
-    const ext = audio.type.includes("mp4") ? "m4a" : audio.type.includes("ogg") ? "ogg" : "webm";
+    const ext = audio.type.includes("wav") ? "wav" : audio.type.includes("mp4") ? "m4a" : audio.type.includes("ogg") ? "ogg" : "webm";
     const stt = await transcribe(audio, `drill.${ext}`, scene?.keyterms ?? []);
     const verdict = sttGate(stt, durationMs);
     if (!verdict.ok) return NextResponse.json({ ok: false, heard: stt.transcript || undefined, message: verdict.message });
