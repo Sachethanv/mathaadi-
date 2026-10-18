@@ -8,6 +8,8 @@ type Props = {
   elapsed: number;
   maxMs: number;
   busy: boolean;
+  /** Hands-free: recording started on its own and ends when the learner pauses. */
+  auto?: boolean;
   onStart: () => void;
   onStop: () => void;
   size?: "lg" | "md";
@@ -17,7 +19,7 @@ type Props = {
  * Hold to talk, release to send. A quick tap switches to tap-to-stop, which is
  * easier for some people (and for one-handed use on a bus).
  */
-export function MicButton({ recording, level, elapsed, maxMs, busy, onStart, onStop, size = "lg" }: Props) {
+export function MicButton({ recording, level, elapsed, maxMs, busy, auto = false, onStart, onStop, size = "lg" }: Props) {
   const downAt = useRef(0);
   const [latched, setLatched] = useState(false);
   useEffect(() => {
@@ -37,7 +39,7 @@ export function MicButton({ recording, level, elapsed, maxMs, busy, onStart, onS
     onStart();
   };
   const up = () => {
-    if (!recording && !downAt.current) return;
+    if (!downAt.current) return; // this press stopped a recording
     const held = Date.now() - downAt.current;
     downAt.current = 0;
     if (held < 350) {
@@ -55,7 +57,7 @@ export function MicButton({ recording, level, elapsed, maxMs, busy, onStart, onS
 
   const secs = Math.floor(elapsed / 1000);
   const nearEnd = recording && maxMs - elapsed < 4000;
-  const label = busy ? "Thinking…" : recording ? (latched ? "Listening… tap to send" : "Listening… release to send") : "Hold to talk";
+  const label = busy ? "Thinking…" : recording ? (auto ? "Listening… pause to send" : latched ? "Listening… tap to send" : "Listening… release to send") : auto ? "Tap to talk" : "Hold to talk";
 
   return (
     <div className="flex flex-col items-center gap-2">

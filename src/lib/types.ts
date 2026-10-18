@@ -79,3 +79,10 @@ export type TurnResult = {
 };
 
 export type HistoryItem = { who: "character" | "learner"; kn: string };
+
+/** One line of the streamed /api/turn response (NDJSON). */
+export type StreamEvent =
+  | { t: "heard"; heard: string; typed?: boolean; demo?: boolean }
+  | { t: "reply"; kn: string } // the character's line so far
+  | { t: "audio"; audio: string; mime: string } // one spoken sentence, in order
+  | { t: "done"; result: TurnResult };

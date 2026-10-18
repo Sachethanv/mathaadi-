@@ -149,3 +149,8 @@ button {
 
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 12px); }
 .safe-top { padding-top: max(env(safe-area-inset-top), 0px); }
+
+/* Streaming reply caret */
+@keyframes caret-blink { 50% { opacity: 0; } }
+.caret { animation: caret-blink 1s steps(1) infinite; }
+@media (prefers-reduced-motion: reduce) { .caret { animation: none; } }

@@ -7,6 +7,7 @@ export type Settings = {
   showTranslit: boolean;
   showEn: boolean;
   slowVoice: boolean;
+  handsFree: boolean;
   demo: boolean;
   onboarded: boolean;
 };
@@ -19,7 +20,7 @@ export type Progress = {
   turns: number;
 };
 
-const DEFAULT_SETTINGS: Settings = { showKn: true, showTranslit: true, showEn: true, slowVoice: false, demo: false, onboarded: false };
+const DEFAULT_SETTINGS: Settings = { showKn: true, showTranslit: true, showEn: true, slowVoice: false, handsFree: false, demo: false, onboarded: false };
 const DEFAULT_PROGRESS: Progress = { days: [], scenes: {}, turns: 0 };
 
 function read<T>(key: string, fallback: T): T {

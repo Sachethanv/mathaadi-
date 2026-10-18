@@ -2,19 +2,22 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isFail, useRecorder } from "@/hooks/useRecorder";
-import { playBase64, playLine, stopAudio, unlockAudio } from "@/lib/audio";
+import { enqueueBase64, playBase64, playLine, queueFinished, stopAudio, unlockAudio } from "@/lib/audio";
 import { transliterate } from "@/lib/kannada";
 import { getScene, LIFESAVERS } from "@/lib/scenes";
 import { scoreBest } from "@/lib/score";
-import { clearConversation, loadConversation, markPracticed, saveConversation, useSettings } from "@/lib/store";
-import type { HistoryItem, TurnResult } from "@/lib/types";
-import { BackIcon, BulbIcon, KeyboardIcon, MicIcon, RetryIcon, SendIcon } from "../icons";
+import { clearConversation, loadConversation, markPracticed, saveConversation, settingsStore, useSettings } from "@/lib/store";
+import type { HistoryItem, StreamEvent, TurnResult } from "@/lib/types";
+import { BackIcon, BulbIcon, KeyboardIcon, MicIcon, RetryIcon, SendIcon, WaveIcon } from "../icons";
 import { MicButton } from "../MicButton";
 import { HearButtons, InAppBrowserBanner, LineText, Sheet, useLive, usePlaying } from "../ui";
 import { Brief } from "./Brief";
 import { Bubble, Typing } from "./Bubbles";
 import { Report } from "./Report";
 import { type Convo, type Msg, type ScoredPhrase, uid } from "./types";
+
+// What has streamed in so far for the turn in flight.
+type Pending = { heard?: string; typed?: boolean; demo?: boolean; reply?: string };
 
 const fresh = (): Convo => ({ stage: "brief", msgs: [], doneSteps: [], stepsDone: 0, goalComplete: false });
 
@@ -32,11 +35,17 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
   const [text, setText] = useState("");
   const [hintOpen, setHintOpen] = useState(false);
   const [stuck, setStuck] = useState(0);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [autoRec, setAutoRec] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const startingRec = useRef(false);
   const stopWanted = useRef(false);
   const convoRef = useRef(convo);
   convoRef.current = convo;
+  const muted = useRef(false); // barge-in: drop the rest of the reply's audio
+  const handsFree = settings.handsFree && !typing;
+  const flags = useRef({ handsFree, stuck, hintOpen });
+  flags.current = { handsFree, stuck, hintOpen };
 
   // Restore a conversation after a reload.
   useEffect(() => {
@@ -49,7 +58,7 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
 
   useEffect(() => {
     listRef.current?.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [convo.msgs.length, thinking]);
+  }, [convo.msgs.length, thinking, pending?.heard, pending?.reply]);
 
   const push = (...msgs: Msg[]) => setConvo((c) => ({ ...c, msgs: [...c.msgs, ...msgs] }));
   const notice = (t: string, tone: "info" | "warn" | "good" = "info") => push({ id: uid(), who: "notice", text: t, tone });
@@ -67,7 +76,8 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
       setTyping(true);
       setTimeout(() => notice(fail.message, "warn"), 50);
     }
-    playLine(scene.opening.kn, { scene: scene.id, slow, live });
+    await playLine(scene.opening.kn, { scene: scene.id, slow, live });
+    if (!fail) listenNext();
   };
 
   const restart = () => {
@@ -87,7 +97,7 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
     return best && best.score >= 60 ? best : null;
   };
 
-  const handleResult = async (r: TurnResult) => {
+  const handleResult = (r: TurnResult) => {
     const c = convoRef.current;
     if (r.kind === "no_speech" || (r.kind === "error" && !r.heard)) {
       notice(r.message ?? "Try again.", r.kind === "error" ? "warn" : "info");
@@ -127,12 +137,18 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
       bumpStuck();
     }
     if (r.kind === "error" && r.message) notice(r.message, "warn");
-
-    if (r.reply) {
-      if (r.audio) await playBase64(r.audio, r.audioMime);
-      else await playLine(r.reply.kn, { scene: scene.id, slow, live });
-    }
   };
+
+  /** Hands-free: start listening again once the character has finished. */
+  const listenNext = () =>
+    // A short gap lets the speaker's echo die down (and React catch up).
+    setTimeout(() => {
+      const f = flags.current;
+      const c = convoRef.current;
+      if (!f.handsFree || f.hintOpen || f.stuck >= 2 || c.stage !== "talk" || c.goalComplete) return;
+      if (document.visibilityState !== "visible") return;
+      onMicStart();
+    }, 250);
 
   const bumpStuck = () =>
     setStuck((n) => {
@@ -152,32 +168,92 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
     fd.append("done", JSON.stringify(c.doneSteps));
     if (!live) fd.append("demo", "1");
     if (slow) fd.append("slow", "1");
+    fd.append("stream", "1");
     if (payload.audio) {
       fd.append("audio", payload.audio, "turn");
       fd.append("durationMs", String(payload.durationMs ?? 0));
     } else fd.append("text", payload.text ?? "");
 
     setThinking(true);
+    setPending(null);
+    muted.current = false;
+    const out: { result: TurnResult | null; gotAudio: boolean } = { result: null, gotAudio: false };
+    const finish = (r: TurnResult) => {
+      out.result = r;
+      setPending(null);
+      setThinking(false);
+      handleResult(r);
+    };
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 45000);
     try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 30000);
       const res = await fetch("/api/turn", { method: "POST", body: fd, signal: ctrl.signal });
-      clearTimeout(t);
-      const r = (await res.json()) as TurnResult;
-      setThinking(false);
-      await handleResult(r);
+      if (res.body && res.headers.get("content-type")?.includes("ndjson")) {
+        // Streamed turn: what was heard, then the reply as it's written, then
+        // its audio one sentence at a time.
+        const onEvent = (e: StreamEvent) => {
+          if (e.t === "heard") setPending({ heard: e.heard, typed: e.typed, demo: e.demo });
+          else if (e.t === "reply") setPending((p) => ({ ...p, reply: e.kn }));
+          else if (e.t === "audio" && !muted.current) {
+            out.gotAudio = true;
+            enqueueBase64(e.audio, e.mime);
+          } else if (e.t === "done") finish(e.result);
+        };
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (value) buf += dec.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (line) onEvent(JSON.parse(line) as StreamEvent);
+          }
+          if (done) break;
+        }
+      } else {
+        const r = (await res.json()) as TurnResult;
+        finish(r);
+        if (r.audio) {
+          out.gotAudio = true;
+          await playBase64(r.audio, r.audioMime);
+        }
+      }
     } catch {
+      if (!out.result) notice("The connection dropped. Check your data and try again.", "warn");
+    } finally {
+      clearTimeout(t);
       setThinking(false);
-      notice("The connection dropped. Check your data and try again.", "warn");
+      setPending(null);
     }
+
+    const r = out.result;
+    if (!r || muted.current) return;
+    if (out.gotAudio) await queueFinished();
+    else if (r.reply) await playLine(r.reply.kn, { scene: scene.id, slow, live });
+    if (!muted.current && r.kind !== "error" && (r.kind !== "no_speech" || r.reply)) listenNext();
   };
 
   const onMicStart = useCallback(async () => {
     unlockAudio();
+    muted.current = true;
     stopAudio(); // never record the character's own voice
     startingRec.current = true;
     stopWanted.current = false;
-    const fail = await recorder.start();
+    const auto = flags.current.handsFree;
+    const fail = await recorder.start(
+      auto
+        ? {
+            onEnd: (why) => {
+              if (why === "pause") onMicStopRef.current();
+              else recorder.abort(""); // nobody spoke: wait for a tap
+            },
+          }
+        : undefined,
+    );
+    setAutoRec(auto && !fail);
     startingRec.current = false;
     if (fail) {
       notice(fail.message, "warn");
@@ -188,6 +264,7 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recorder]);
 
+  const onMicStopRef = useRef<() => void>(() => {});
   const onMicStop = async () => {
     if (startingRec.current) {
       stopWanted.current = true;
@@ -201,6 +278,7 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
     }
     send({ audio: r.blob, mime: r.mime, durationMs: r.durationMs });
   };
+  onMicStopRef.current = onMicStop;
 
   const onType = (e: React.FormEvent) => {
     e.preventDefault();
@@ -284,12 +362,31 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
           {convo.msgs.map((m) => (
             <Bubble key={m.id} msg={m} scene={scene} live={live} avatar={scene.icon} />
           ))}
-          {thinking && <Typing scene={scene} />}
+          {pending?.heard && (
+            <Bubble msg={{ id: "pending-heard", who: "learner", heard: pending.heard, kind: "clear", typed: pending.typed, demo: pending.demo }} scene={scene} live={live} avatar={scene.icon} />
+          )}
+          {pending?.reply && (
+            <Bubble
+              msg={{ id: "pending-reply", who: "character", line: { kn: pending.reply, en: "", translit: transliterate(pending.reply) } }}
+              scene={scene}
+              live={live}
+              avatar={scene.icon}
+              streaming
+            />
+          )}
+          {thinking && !pending?.reply && <Typing scene={scene} />}
           {canWrapUp && !thinking && (
             <div className="rise rounded-3xl border border-brand bg-brand-soft p-4 text-center">
               <p className="font-bold">{convo.goalComplete ? "🎉 You did it!" : "Good session!"}</p>
               <p className="mt-1 text-sm text-muted">{convo.goalComplete ? "Keep chatting, or see how clearly you came across." : "See how clearly you came across."}</p>
-              <button type="button" onClick={() => { stopAudio(); setConvo((c) => ({ ...c, stage: "report" })); }} className="mt-3 rounded-full bg-brand px-6 py-3 font-semibold text-on-brand">
+              <button
+                type="button"
+                onClick={() => {
+                  stopAudio();
+                  setConvo((c) => ({ ...c, stage: "report" }));
+                }}
+                className="mt-3 rounded-full bg-brand px-6 py-3 font-semibold text-on-brand"
+              >
                 See my report
               </button>
             </div>
@@ -318,21 +415,52 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
             </button>
           </form>
         ) : (
-          <div className="flex items-center justify-between pb-1">
-            <button type="button" onClick={() => setHintOpen(true)} className={`flex w-20 flex-col items-center gap-1 text-xs font-medium ${stuck >= 2 ? "text-accent" : "text-muted"}`} aria-label="Show hint phrases">
-              <span className={`grid h-12 w-12 place-items-center rounded-full ${stuck >= 2 ? "bg-accent-soft" : "bg-surface-2"}`}>
-                <BulbIcon size={20} />
-              </span>
-              Hints
-            </button>
-            <MicButton recording={recorder.recording} level={recorder.level} elapsed={recorder.elapsed} maxMs={recorder.maxMs} busy={thinking} onStart={onMicStart} onStop={onMicStop} />
-            <button type="button" onClick={() => setTyping(true)} className="flex w-20 flex-col items-center gap-1 text-xs font-medium text-muted" aria-label="Type instead">
-              <span className="grid h-12 w-12 place-items-center rounded-full bg-surface-2">
-                <KeyboardIcon size={20} />
-              </span>
-              Type
-            </button>
-          </div>
+          <>
+            <div className="-mt-1 mb-1 flex justify-center">
+              <button
+                type="button"
+                aria-pressed={settings.handsFree}
+                onClick={() => {
+                  const on = !settings.handsFree;
+                  settingsStore.set({ handsFree: on });
+                  flags.current.handsFree = on;
+                  if (on && !thinking && !recorder.recording) onMicStart();
+                }}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${settings.handsFree ? "bg-brand-soft text-brand" : "text-muted"}`}
+              >
+                <WaveIcon size={14} /> Hands-free {settings.handsFree ? "on" : "off"}
+              </button>
+            </div>
+            <div className="flex items-center justify-between pb-1">
+              <button
+                type="button"
+                onClick={() => setHintOpen(true)}
+                className={`flex w-20 flex-col items-center gap-1 text-xs font-medium ${stuck >= 2 ? "text-accent" : "text-muted"}`}
+                aria-label="Show hint phrases"
+              >
+                <span className={`grid h-12 w-12 place-items-center rounded-full ${stuck >= 2 ? "bg-accent-soft" : "bg-surface-2"}`}>
+                  <BulbIcon size={20} />
+                </span>
+                Hints
+              </button>
+              <MicButton
+                recording={recorder.recording}
+                level={recorder.level}
+                elapsed={recorder.elapsed}
+                maxMs={recorder.maxMs}
+                busy={thinking}
+                auto={recorder.recording ? autoRec : handsFree}
+                onStart={onMicStart}
+                onStop={onMicStop}
+              />
+              <button type="button" onClick={() => setTyping(true)} className="flex w-20 flex-col items-center gap-1 text-xs font-medium text-muted" aria-label="Type instead">
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-surface-2">
+                  <KeyboardIcon size={20} />
+                </span>
+                Type
+              </button>
+            </div>
+          </>
         )}
         {playing && !recorder.recording && <p className="pb-1 text-center text-xs text-muted">{scene.character.name} is speaking · tap the mic to interrupt</p>}
       </div>
@@ -346,7 +474,14 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
               <div className="flex items-center gap-1.5">
                 <HearButtons text={p.kn} scene={scene.id} live={live} compact />
                 {typing && (
-                  <button type="button" onClick={() => { setText(p.kn); setHintOpen(false); }} className="h-9 rounded-full bg-brand-soft px-3 text-xs font-semibold text-brand">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setText(p.kn);
+                      setHintOpen(false);
+                    }}
+                    className="h-9 rounded-full bg-brand-soft px-3 text-xs font-semibold text-brand"
+                  >
                     Use
                   </button>
                 )}
@@ -355,7 +490,14 @@ export function SceneFlow({ sceneId }: { sceneId: string }) {
           ))}
         </ul>
         {!typing && (
-          <button type="button" onClick={() => { setTyping(true); setHintOpen(false); }} className="mb-4 w-full rounded-full border border-line py-3 font-semibold">
+          <button
+            type="button"
+            onClick={() => {
+              setTyping(true);
+              setHintOpen(false);
+            }}
+            className="mb-4 w-full rounded-full border border-line py-3 font-semibold"
+          >
             Type instead
           </button>
         )}

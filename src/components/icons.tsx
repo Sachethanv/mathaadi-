@@ -65,3 +65,6 @@ export const ArrowIcon = (p: P) => (
 export const EarIcon = (p: P) => (
   <svg {...base(p)}><path d="M6 9a6 6 0 1 1 12 0c0 3-2 4-3 5.5s-1 4.5-4 4.5a3 3 0 0 1-3-3" /><path d="M9.5 9a2.5 2.5 0 0 1 5 0" /></svg>
 );
+export const WaveIcon = (p: P) => (
+  <svg {...base(p)}><path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 10.5v3M21 12h0" /></svg>
+);

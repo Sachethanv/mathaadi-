@@ -117,3 +117,92 @@ export async function speak(text: string, speaker: string, pace = 1): Promise<Bu
   if (!b64) throw new SarvamError(502, "upstream", "Sarvam TTS returned no audio");
   return Buffer.from(b64, "base64");
 }
+
+/**
+ * Same request as chatJson, streamed (SSE). onText gets the whole answer so
+ * far after every chunk, plus a stop() that ends the stream early (used when
+ * the reply already failed a gate, so no more tokens are paid for).
+ */
+export async function chatStream(
+  system: string,
+  user: string,
+  schema: object,
+  onText: (soFar: string, stop: () => void) => void,
+): Promise<{ content: string; finish: string; stopped: boolean }> {
+  const ctrl = new AbortController();
+  let stopped = false;
+  const stop = () => {
+    stopped = true;
+    ctrl.abort();
+  };
+  // 25 s to the first token, 40 s overall.
+  let timedOut = false;
+  const firstByte = setTimeout(() => ((timedOut = true), ctrl.abort()), 25000);
+  const overall = setTimeout(() => ((timedOut = true), ctrl.abort()), 40000);
+  let content = "";
+  let finish = "";
+  try {
+    const res = await fetch(`${BASE}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "api-subscription-key": KEY, Authorization: `Bearer ${KEY}` },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        temperature: 0.4,
+        max_tokens: 1500,
+        reasoning_effort: "low",
+        stream: true,
+        response_format: { type: "json_schema", json_schema: { name: "turn", schema, strict: true } },
+      }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok || !res.body) {
+      const body = await res.text().catch(() => "");
+      const code = /insufficient_quota|quota/i.test(body) ? "quota" : res.status === 429 ? "busy" : "upstream";
+      throw new SarvamError(res.status, code, `Sarvam chat stream ${res.status}: ${body.slice(0, 300)}`);
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      clearTimeout(firstByte);
+      buf += dec.decode(value, { stream: true });
+      let nl: number;
+      let changed = false;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "[DONE]") continue;
+        try {
+          const j = JSON.parse(data);
+          const choice = j.choices?.[0];
+          // Reasoning tokens (if the model sends them separately) are ignored.
+          const piece = choice?.delta?.content;
+          if (typeof piece === "string" && piece) {
+            content += piece;
+            changed = true;
+          }
+          if (choice?.finish_reason) finish = String(choice.finish_reason);
+        } catch {}
+      }
+      if (changed) onText(content, stop);
+      if (stopped) break;
+    }
+    return { content, finish, stopped };
+  } catch (e) {
+    if (stopped) return { content, finish, stopped };
+    if (e instanceof SarvamError) throw e;
+    if (timedOut) throw new SarvamError(504, "timeout", "Sarvam chat stream timed out");
+    throw new SarvamError(502, "network", `Sarvam chat stream failed: ${(e as Error).message}`);
+  } finally {
+    clearTimeout(firstByte);
+    clearTimeout(overall);
+  }
+}

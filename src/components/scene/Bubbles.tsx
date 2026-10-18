@@ -32,7 +32,7 @@ function ScorePill({ m }: { m: ScoredPhrase }) {
   );
 }
 
-export function Bubble({ msg, scene, live, avatar }: { msg: Msg; scene: Scene; live: boolean; avatar: string }) {
+export function Bubble({ msg, scene, live, avatar, streaming = false }: { msg: Msg; scene: Scene; live: boolean; avatar: string; streaming?: boolean }) {
   if (msg.who === "notice") {
     const cls = msg.tone === "good" ? "bg-good-soft text-good" : msg.tone === "warn" ? "bg-ok-soft text-ink" : "bg-surface-2 text-muted";
     return (
@@ -53,9 +53,13 @@ export function Bubble({ msg, scene, live, avatar }: { msg: Msg; scene: Scene; l
           <div className="flex items-start gap-3">
             <LineText kn={msg.line.kn} en={msg.line.en} translit={msg.line.translit} className="min-w-0 flex-1" />
           </div>
-          <div className="mt-3 flex justify-end">
-            <HearButtons text={msg.line.kn} scene={scene.id} live={live} compact />
-          </div>
+          {streaming ? (
+            <span className="caret mt-1 inline-block h-4 w-1.5 rounded-full bg-brand" aria-hidden />
+          ) : (
+            <div className="mt-3 flex justify-end">
+              <HearButtons text={msg.line.kn} scene={scene.id} live={live} compact />
+            </div>
+          )}
         </div>
       </div>
     );

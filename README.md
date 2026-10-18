@@ -49,6 +49,19 @@ flowchart LR
 | 3 | LLM (`src/lib/server/prompt.ts`) | Schema-forced output; must only respond to the exact words heard, never guess |
 | 4 | Server (`src/app/api/turn/route.ts`) | Code overrides any "unclear" turn with the scripted repeat line; reply must be Kannada script and short; one retry, then a fallback line |
 
+### Real-time turns
+
+Turns are streamed, so the conversation feels live instead of waiting for one big answer:
+
+1. As soon as Sarvam's speech-to-text returns, the learner sees **"I heard …"** while the character is still thinking.
+2. `sarvam-105b` is called with `stream: true`. The reply is read out of the JSON as it is written (`src/lib/server/stream.ts`), and each finished sentence appears on screen at once.
+3. Each sentence goes to Bulbul straight away, in parallel, and the audio streams back in order, so the character starts speaking after the first sentence.
+4. **Hands-free mode** (toggle on the talk screen or in Settings): the mic opens by itself after the character finishes, and the turn is sent when the learner pauses for about a second. If nobody speaks for 8 seconds it stops and waits for a tap.
+
+The no-guessing rules still hold while streaming: nothing is shown until the model has said whether it understood; an "unclear" turn stops the stream and uses the scripted repeat line; a sentence that isn't Kannada script ends the reply (or, if it's the first, the turn is retried once without streaming). `/api/turn` returns NDJSON events (`heard`, `reply`, `audio`, `done`) when the request has `stream=1`, and plain JSON otherwise. Demo mode streams too, paced like the live service.
+
+Sarvam also has WebSocket APIs for streaming speech-to-text and text-to-speech. They need the API key in a request header, so a browser can't call them directly, and Vercel functions can't hold an incoming WebSocket. Using them (for word-by-word live captions) would need a small relay server on a host such as Render or Fly.io. For short learner turns the streamed pipeline above gets most of the speed-up without it.
+
 After two unclear tries in a row, the app stops asking for repeats and opens hint phrases with slow audio and a "type instead" option.
 
 ## Intelligibility score
@@ -106,7 +119,8 @@ Audio is sent to Sarvam AI for transcription and is not stored by Maathaadi. Pro
 ```
 src/app/page.tsx                 Home: streak, phrase of the day, scenes, lifesaver phrases
 src/app/scene/[id]               Scene flow: brief → talk → report
-src/app/api/turn                 STT → gates → LLM → gates → TTS (or demo engine)
+src/app/api/turn                 STT → gates → streamed LLM → gates → sentence TTS (or demo engine)
+src/lib/server/stream.ts         Reads the reply out of the model's JSON while it streams
 src/app/api/tts                  Cached audio for fixed lines
 src/app/api/transcribe           "Say it again" drill on the report
 src/lib/scenes/                  Scene content by life area, phrases, demo scripts

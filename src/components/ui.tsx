@@ -144,6 +144,7 @@ export function SettingsSheet({ open, onClose, serverLive }: { open: boolean; on
       <p className="mb-1 mt-5 text-xs font-semibold uppercase tracking-wider text-muted">Practice</p>
       <div className="divide-y divide-line">
         <Toggle label="Slower voice" hint="Characters speak a little slower" checked={s.slowVoice} onChange={(v) => set({ slowVoice: v })} />
+        <Toggle label="Hands-free" hint="Listens after each reply and sends when you pause" checked={s.handsFree} onChange={(v) => set({ handsFree: v })} />
         <Toggle
           label="Demo mode"
           hint={serverLive === false ? "On automatically: no live voice service is set up yet" : "Scripted characters, no internet voice service"}

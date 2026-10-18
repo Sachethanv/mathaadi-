@@ -1,18 +1,20 @@
 import "server-only";
 import type { HistoryItem, Scene } from "../types";
 
+// Property order matters: the reply is streamed, so the fields it depends on
+// (comprehension, meaning) come first and the slow extras come last.
 export const TURN_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["comprehension", "heard", "meaning_en", "step_done", "goal_complete", "reply_kn", "reply_en", "tip", "better_kn", "better_en"],
+  required: ["comprehension", "meaning_en", "reply_kn", "reply_en", "step_done", "goal_complete", "heard", "tip", "better_kn", "better_en"],
   properties: {
     comprehension: { type: "string", enum: ["clear", "partial", "unclear"] },
-    heard: { type: "string", description: "The learner's words copied exactly from <heard>." },
     meaning_en: { type: ["string", "null"], description: "What the words literally say in English, or null if unclear." },
-    step_done: { type: "boolean", description: "True if this turn completed one of the goal steps." },
-    goal_complete: { type: "boolean", description: "True once every goal step has been done in the conversation." },
     reply_kn: { type: "string", description: "The character's next line, Kannada script, one or two short sentences." },
     reply_en: { type: "string", description: "English translation of reply_kn." },
+    step_done: { type: "boolean", description: "True if this turn completed one of the goal steps." },
+    goal_complete: { type: "boolean", description: "True once every goal step has been done in the conversation." },
+    heard: { type: "string", description: "The learner's words copied exactly from <heard>." },
     tip: { type: ["string", "null"], description: "One short, kind tip in English about the learner's Kannada, or null." },
     better_kn: { type: ["string", "null"], description: "If the learner used English words or a stiff phrase, a natural Kannada way to say it. Else null." },
     better_en: { type: ["string", "null"], description: "English gloss of better_kn, or null." },

@@ -20,6 +20,9 @@ let unlocked = false;
 const listeners = new Set<(playing: boolean) => void>();
 const blobCache = new Map<string, string>();
 let current: { resolve: () => void } | null = null;
+// Streamed replies arrive one sentence at a time; they play back to back.
+let queue: string[] = [];
+let draining: Promise<void> | null = null;
 
 function audio() {
   if (!el) {
@@ -36,7 +39,8 @@ function emit(p: boolean) {
 }
 
 function finish() {
-  emit(false);
+  // Between two queued sentences the character is still "speaking".
+  if (!queue.length) emit(false);
   const c = current;
   current = null;
   c?.resolve();
@@ -62,6 +66,11 @@ export function unlockAudio() {
 }
 
 export function stopAudio() {
+  queue = [];
+  haltCurrent();
+}
+
+function haltCurrent() {
   if (el && !el.paused) el.pause();
   try {
     window.speechSynthesis?.cancel();
@@ -69,8 +78,9 @@ export function stopAudio() {
   if (current) finish();
 }
 
-function playSrc(src: string): Promise<void> {
-  stopAudio();
+function playSrc(src: string, fromQueue = false): Promise<void> {
+  if (fromQueue) haltCurrent();
+  else stopAudio();
   const a = audio();
   return new Promise((resolve) => {
     current = { resolve };
@@ -80,10 +90,31 @@ function playSrc(src: string): Promise<void> {
   });
 }
 
-export function playBase64(b64: string, mime = "audio/mpeg") {
+function base64Url(b64: string, mime: string) {
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-  return playSrc(url);
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+}
+
+export function playBase64(b64: string, mime = "audio/mpeg") {
+  return playSrc(base64Url(b64, mime));
+}
+
+/** Add one streamed sentence; it plays as soon as the one before it ends. */
+export function enqueueBase64(b64: string, mime = "audio/mpeg") {
+  queue.push(base64Url(b64, mime));
+  draining ??= (async () => {
+    while (queue.length) {
+      const next = queue.shift()!;
+      await playSrc(next, true);
+      URL.revokeObjectURL(next);
+    }
+    draining = null;
+  })();
+}
+
+/** Resolves once every queued sentence has played (or playback was stopped). */
+export function queueFinished(): Promise<void> {
+  return draining ?? Promise.resolve();
 }
 
 /** Browser voice fallback (demo mode). Only used if the device has a Kannada voice. */

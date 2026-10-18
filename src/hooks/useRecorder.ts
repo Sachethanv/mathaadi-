@@ -1,6 +1,8 @@
 "use client";
 // Push-to-talk recorder with the browser-side clarity checks (Gate 1):
 // too short, no speech above the noise floor, clipped, and a 15 s hard stop.
+// In hands-free mode it also detects the end of speech, so the turn is sent
+// when the learner pauses instead of when they let go of a button.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type Recording = { blob: Blob; mime: string; durationMs: number };
@@ -9,6 +11,14 @@ export type RecordFail = { reason: "short" | "silent" | "loud" | "interrupted" |
 const MAX_MS = 15000;
 const MIN_MS = 600;
 const TAIL_MS = 300; // keep recording briefly after release (Bluetooth delay)
+const END_PAUSE_MS = 900; // hands-free: this much quiet after speech ends the turn
+const IDLE_MS = 8000; // hands-free: give up if nobody speaks
+
+export type AutoOptions = { onEnd: (why: "pause" | "idle") => void };
+
+function newContext() {
+  return new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+}
 
 function pickMime() {
   if (typeof MediaRecorder === "undefined") return "";
@@ -57,11 +67,17 @@ export function useRecorder() {
 
   /** Ask for the mic up front (e.g. on "Start talking"), so the first press records instantly. */
   const prepare = useCallback(async () => {
+    // Create the audio context inside the tap, so iOS lets hands-free mode
+    // measure the mic later without another tap.
+    try {
+      ctx.current ??= newContext();
+      if (ctx.current.state === "suspended") ctx.current.resume().catch(() => {});
+    } catch {}
     const s = await ensureStream();
     return s instanceof MediaStream ? null : s;
   }, [ensureStream]);
 
-  const start = useCallback(async (): Promise<RecordFail | null> => {
+  const start = useCallback(async (auto?: AutoOptions): Promise<RecordFail | null> => {
     if (rec.current) return null;
     const s = await ensureStream();
     if (!(s instanceof MediaStream)) return s;
@@ -73,13 +89,16 @@ export function useRecorder() {
     clipped.current = { clip: 0, total: 0 };
     aborted.current = null;
 
-    ctx.current ??= new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    ctx.current ??= newContext();
     if (ctx.current.state === "suspended") await ctx.current.resume().catch(() => {});
     const src = ctx.current.createMediaStreamSource(s);
     const an = ctx.current.createAnalyser();
     an.fftSize = 1024;
     src.connect(an);
     const buf = new Float32Array(an.fftSize);
+    // Hands-free end-of-speech detection, against a noise floor measured in
+    // the first few frames.
+    const vad = { floor: [] as number[], thr: 0, run: 0, speech: false, quietSince: 0, ended: false };
     const loop = () => {
       an.getFloatTimeDomainData(buf);
       let sum = 0;
@@ -93,7 +112,27 @@ export function useRecorder() {
       clipped.current.clip += clip;
       clipped.current.total += buf.length;
       setLevel(Math.min(1, v * 6));
-      setElapsed(Date.now() - started.current);
+      const now = Date.now();
+      setElapsed(now - started.current);
+      if (auto && !vad.ended) {
+        if (vad.floor.length < 12) {
+          vad.floor.push(v);
+          vad.thr = Math.min(Math.max([...vad.floor].sort((a, b) => a - b)[Math.floor(vad.floor.length / 2)] * 2.5, 0.015), 0.06);
+        } else if (!vad.speech) {
+          vad.run = v > vad.thr ? vad.run + 1 : 0;
+          if (vad.run >= 5) vad.speech = true;
+          else if (now - started.current > IDLE_MS) {
+            vad.ended = true;
+            auto.onEnd("idle");
+          }
+        } else if (v < vad.thr * 0.8) {
+          vad.quietSince ||= now;
+          if (now - vad.quietSince >= END_PAUSE_MS) {
+            vad.ended = true;
+            auto.onEnd("pause");
+          }
+        } else vad.quietSince = 0;
+      }
       raf.current = requestAnimationFrame(loop);
     };
 
